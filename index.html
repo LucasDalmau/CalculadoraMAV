@@ -6,6 +6,7 @@
 <title>Calculadora CPD / Pagarés — MAV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -167,6 +168,16 @@ body {
 /* PLACEHOLDER */
 .placeholder { text-align: center; padding: 40px 20px; color: var(--text-faint); font-size: 12px; }
 .placeholder .icon { font-size: 28px; margin-bottom: 8px; }
+
+/* SCREENSHOT BUTTON */
+.btn-screenshot {
+  font-family: var(--sans); font-size: 11px; font-weight: 500; 
+  padding: 5px 14px; border: 1px solid var(--border); border-radius: 2px; 
+  background: var(--surface); color: var(--text); cursor: pointer;
+  transition: all 0.12s; user-select: none;
+}
+.btn-screenshot:hover { background: var(--surface2); border-color: var(--border-strong); }
+.btn-screenshot:active { transform: scale(0.98); }
 
 @media (max-width: 700px) { .main-grid { grid-template-columns: 1fr; } }
 </style>
@@ -460,12 +471,17 @@ body {
     </div><!-- /result-panel -->
   </div><!-- /main-grid -->
 
+  <!-- CONTENEDOR CAPTURA SCREENSHOT -->
+  <div id="screenshot-container" style="margin-top:16px;">
+    <button class="btn-screenshot" onclick="captureScreenshot()" id="btn-screenshot">📸 Capturar resultado</button>
+  </div>
+
   <!-- CUADRO CLIENTE -->
   <div id="card-cliente" style="display:none; margin-top:16px;">
     <div class="card" style="border:1.5px solid var(--border-strong); padding:20px 20px 16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div class="section-label" style="margin-bottom:0;border:none;padding:0;">Resumen para el cliente</div>
-        <button onclick="copiarCliente()" id="btn-copiar" style="font-family:var(--sans);font-size:11px;font-weight:500;padding:5px 14px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);color:var(--text-muted);cursor:pointer;">Copiar texto</button>
+        <button onclick="copiarCliente()" id="btn-copiar" style="font-family:var(--sans);font-size:11px;font-weight:500;padding:5px 14px;border:1px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);cursor:pointer;transition:all 0.12s;">Copiar texto</button>
       </div>
       <!-- Una fila de 5 columnas como el cuadrito de la imagen -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
@@ -767,6 +783,90 @@ function calcular() {
 function set(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
+}
+
+// ─── SCREENSHOT ───────────────────────────────────────────────
+async function captureScreenshot() {
+  const btn = document.getElementById('btn-screenshot');
+  const originalText = btn.textContent;
+  
+  try {
+    btn.textContent = '⏳ Capturando...';
+    btn.disabled = true;
+
+    // Crear contenedor para captura que incluye header + resultados
+    const captureDiv = document.createElement('div');
+    captureDiv.style.position = 'absolute';
+    captureDiv.style.left = '-9999px';
+    captureDiv.style.background = 'white';
+    captureDiv.style.padding = '28px 16px';
+    captureDiv.style.width = '900px';
+    document.body.appendChild(captureDiv);
+
+    // Clonar el header
+    const headerClone = document.querySelector('.header').cloneNode(true);
+    captureDiv.appendChild(headerClone);
+
+    // Clonar solo los elementos de resultado (excluyendo card-cliente)
+    const cardDias = document.getElementById('card-dias');
+    const cardCostos = document.getElementById('card-costos');
+    const cardResumen = document.getElementById('card-resumen');
+    const cardFlujos = document.getElementById('card-flujos');
+
+    if (cardDias && cardDias.style.display !== 'none') {
+      captureDiv.appendChild(cardDias.cloneNode(true));
+    }
+    if (cardCostos && cardCostos.style.display !== 'none') {
+      captureDiv.appendChild(cardCostos.cloneNode(true));
+    }
+    if (cardResumen && cardResumen.style.display !== 'none') {
+      captureDiv.appendChild(cardResumen.cloneNode(true));
+    }
+    if (cardFlujos && cardFlujos.style.display !== 'none') {
+      captureDiv.appendChild(cardFlujos.cloneNode(true));
+    }
+
+    // Capturar como imagen
+    const canvas = await html2canvas(captureDiv, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    });
+
+    // Convertir canvas a blob
+    canvas.toBlob(async (blob) => {
+      try {
+        // Copiar a clipboard
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'image/png': blob
+          })
+        ]);
+        
+        btn.textContent = '✓ Capturada';
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }, 2000);
+      } catch (err) {
+        console.error('Error al copiar:', err);
+        btn.textContent = 'Error al copiar';
+        btn.disabled = false;
+      }
+      
+      // Limpiar
+      document.body.removeChild(captureDiv);
+    }, 'image/png');
+
+  } catch (err) {
+    console.error('Error al capturar:', err);
+    btn.textContent = 'Error';
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 2000);
+  }
 }
 
 // ─── CUADRO CLIENTE ───────────────────────────────────────────
