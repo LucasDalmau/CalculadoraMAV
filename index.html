@@ -58,6 +58,27 @@ body {
   margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
 }
 
+/* SECTION LABEL CONTAINER WITH LADO */
+.section-label-with-lado {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.section-label-with-lado .label-text {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.section-label-with-lado .lado-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: capitalize; padding: 2px 8px; border-radius: 2px;
+  background: var(--surface2); display: inline-block;
+}
+.section-label-with-lado .lado-badge.compra {
+  color: var(--green); font-weight: 700;
+}
+.section-label-with-lado .lado-badge.venta {
+  color: var(--red); font-weight: 700;
+}
+
 /* RADIO */
 .radio-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .radio-btn  { display: none; }
@@ -309,7 +330,10 @@ body {
 
       <!-- DÍAS -->
       <div class="card" id="card-dias" style="display:none">
-        <div class="section-label">Días</div>
+        <div class="section-label-with-lado">
+          <span class="label-text">Días</span>
+          <span class="lado-badge" id="lado-badge"></span>
+        </div>
         <table class="cost-table">
           <tr>
             <td>Concertación</td>
@@ -481,7 +505,7 @@ body {
     <div class="card" style="border:1.5px solid var(--border-strong); padding:20px 20px 16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div class="section-label" style="margin-bottom:0;border:none;padding:0;">Resumen para el cliente</div>
-        <button onclick="copiarCliente()" id="btn-copiar" style="font-family:var(--sans);font-size:11px;font-weight:500;padding:5px 14px;border:1px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);cursor:pointer;transition:all 0.12s;">Copiar texto</button>
+        <button onclick="copiarCliente()" id="btn-copiar" style="font-family:var(--sans);font-size:11px;font-weight:500;padding:5px 14px;border:1px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);cursor:pointer;transition:all 0.12s;user-select:none;">Copiar texto</button>
       </div>
       <!-- Una fila de 5 columnas como el cuadrito de la imagen -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
@@ -674,6 +698,13 @@ function calcular() {
   const esPagare  = instrumento === 'pagare';
   const esVenta   = operacion === 'venta';
   const esRI      = ivaCond === 'noex';
+
+  // Update "Lado" badge
+  const ladoBadge = document.getElementById('lado-badge');
+  if (ladoBadge) {
+    ladoBadge.textContent = 'Lado: ' + (esVenta ? 'Venta' : 'Compra');
+    ladoBadge.className = 'lado-badge ' + (esVenta ? 'venta' : 'compra');
+  }
 
   // Fechas
   set('r-f-conc',   fmtDate(fConc));
