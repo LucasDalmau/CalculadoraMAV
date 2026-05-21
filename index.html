@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -190,15 +191,28 @@ body {
 .placeholder { text-align: center; padding: 40px 20px; color: var(--text-faint); font-size: 12px; }
 .placeholder .icon { font-size: 28px; margin-bottom: 8px; }
 
+/* BUTTON GROUP */
+.button-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
 /* SCREENSHOT BUTTON */
-.btn-screenshot {
+.btn-screenshot,
+.btn-pdf {
   font-family: var(--sans); font-size: 11px; font-weight: 500; 
   padding: 5px 14px; border: 1px solid var(--border); border-radius: 2px; 
   background: var(--surface); color: var(--text); cursor: pointer;
   transition: all 0.12s; user-select: none;
 }
-.btn-screenshot:hover { background: var(--surface2); border-color: var(--border-strong); }
-.btn-screenshot:active { transform: scale(0.98); }
+.btn-screenshot:hover,
+.btn-pdf:hover { background: var(--surface2); border-color: var(--border-strong); }
+.btn-screenshot:active,
+.btn-pdf:active { transform: scale(0.98); }
+.btn-screenshot:disabled,
+.btn-pdf:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* CLIENTE VALUES - responsive sizing */
 .cliente-value {
@@ -217,7 +231,10 @@ body {
   font-weight: 600;
 }
 
-@media (max-width: 700px) { .main-grid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { 
+  .main-grid { grid-template-columns: 1fr; }
+  .button-group { flex-direction: column; }
+}
 </style>
 </head>
 <body>
@@ -512,9 +529,10 @@ body {
     </div><!-- /result-panel -->
   </div><!-- /main-grid -->
 
-  <!-- CONTENEDOR CAPTURA SCREENSHOT -->
-  <div id="screenshot-container" style="margin-top:16px;">
-    <button class="btn-screenshot" onclick="captureScreenshot()" id="btn-screenshot">Copiar Imagen</button>
+  <!-- CONTENEDOR BOTONES -->
+  <div class="button-group" id="button-group" style="display:none;">
+    <button class="btn-screenshot" onclick="captureScreenshot()" id="btn-screenshot">📸 Copiar Imagen</button>
+    <button class="btn-pdf" onclick="generatePDF()" id="btn-pdf">📄 Descargar Reporte PDF</button>
   </div>
 
   <!-- CUADRO CLIENTE -->
@@ -678,6 +696,8 @@ document.getElementById('monto').addEventListener('input', function() {
 });
 
 // ─── CALCULAR ─────────────────────────────────────────────────
+let lastCalculationData = {};
+
 function calcular() {
   const instrumento = document.querySelector('input[name="instrumento"]:checked').value;
   const operacion   = document.querySelector('input[name="operacion"]:checked').value;
@@ -700,6 +720,7 @@ function calcular() {
   const cards = ['card-dias','card-costos','card-resumen','card-flujos'];
   document.getElementById('placeholder').style.display = ready ? 'none' : 'block';
   cards.forEach(id => document.getElementById(id).style.display = ready ? 'block' : 'none');
+  document.getElementById('button-group').style.display = ready ? 'flex' : 'none';
 
   if (!ready) return;
 
@@ -707,6 +728,7 @@ function calcular() {
     errEl.classList.add('visible');
     ['card-costos','card-resumen','card-flujos'].forEach(id =>
       document.getElementById(id).style.display = 'none');
+    document.getElementById('button-group').style.display = 'none';
     return;
   }
 
@@ -826,6 +848,15 @@ function calcular() {
   } else {
     document.getElementById('card-cliente').style.display = 'none';
   }
+
+  // Store data for PDF generation
+  lastCalculationData = {
+    instrumento, operacion, ivaCond, fConc, fLiq, fVenc, fAcr,
+    monto, tasaAnual, arancelTNA, diasDesc, diasAcred, diasCalc,
+    descuento, impDescontado, arancelBase, arancelIVA, arancelTotal,
+    derPct, derBase, derIVA, derTotal, ivaDescTotal, totalGastos, impNeto,
+    esVenta, esPagare, esRI, fmtDate, fmtP, fmt
+  };
 }
 
 function set(id, val) {
@@ -909,6 +940,154 @@ async function captureScreenshot() {
 
   } catch (err) {
     console.error('Error al capturar:', err);
+    btn.textContent = 'Error';
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 2000);
+  }
+}
+
+// ─── PDF GENERATION ───────────────────────────────────────────
+function generatePDF() {
+  const btn = document.getElementById('btn-pdf');
+  const originalText = btn.textContent;
+  
+  try {
+    btn.textContent = '⏳ Generando...';
+    btn.disabled = true;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let yPos = 15;
+
+    // Colors
+    const darkColor = [28, 27, 25];
+    const mutedColor = [101, 98, 93];
+    const greenColor = [20, 83, 45];
+    const borderColor = [221, 219, 214];
+
+    // Header
+    doc.setFontSize(16);
+    doc.setTextColor(...darkColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Calculadora CPD / Pagarés', 15, yPos);
+
+    doc.setFontSize(10);
+    doc.setTextColor(...mutedColor);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Descuento de cheques de pago diferido y pagarés bursátiles', 15, yPos + 6);
+
+    // Date
+    doc.setFontSize(9);
+    doc.setTextColor(...mutedColor);
+    const today = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+    doc.text(`Generado: ${today}`, pageWidth - 15, yPos, { align: 'right' });
+
+    yPos += 16;
+
+    // Section: Operación
+    doc.setFontSize(11);
+    doc.setTextColor(...darkColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detalles de la Operación', 15, yPos);
+
+    yPos += 7;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...mutedColor);
+
+    const d = lastCalculationData;
+    const operDetails = [
+      [`Instrumento: ${d.instrumento.toUpperCase()}`, `Lado: ${d.operacion.toUpperCase()}`],
+      [`Concertación: ${d.fmtDate(d.fConc)}`, `Liquidación: ${d.fmtDate(d.fLiq)}`],
+      [`Vencimiento: ${d.fmtDate(d.fVenc)}`, `Acreditación: ${d.fmtDate(d.fAcr)}`],
+      [`Días de descuento: ${d.diasCalc}`, `Tasa TNA: ${d.fmt(d.tasaAnual*100, 2)}%`]
+    ];
+
+    operDetails.forEach(row => {
+      doc.text(row[0], 15, yPos);
+      doc.text(row[1], pageWidth/2, yPos);
+      yPos += 5;
+    });
+
+    yPos += 3;
+
+    // Section: Cálculos
+    doc.setFontSize(11);
+    doc.setTextColor(...darkColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Cálculos', 15, yPos);
+
+    yPos += 7;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...mutedColor);
+
+    const calcDetails = [
+      ['Valor Nominal', d.fmtP(d.monto)],
+      ['Descuento Bruto', d.fmtP(d.descuento)],
+      ['Importe Descontado', d.fmtP(d.impDescontado)],
+      ['Arancel ALyC', d.fmtP(d.arancelTotal)],
+      ['Derechos de Mercado', d.fmtP(d.derTotal)],
+      ['Otros Gastos', d.fmtP(d.ivaDescTotal)]
+    ];
+
+    calcDetails.forEach(([label, value]) => {
+      doc.setTextColor(...mutedColor);
+      doc.text(label + ':', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(value, pageWidth - 15, yPos, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      yPos += 5;
+    });
+
+    // Total line
+    yPos += 2;
+    doc.setDrawColor(...borderColor);
+    doc.line(15, yPos, pageWidth - 15, yPos);
+    yPos += 5;
+
+    doc.setFontSize(11);
+    doc.setTextColor(...greenColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total Gastos:', 15, yPos);
+    doc.setFontSize(11);
+    doc.text(d.fmtP(d.totalGastos), pageWidth - 15, yPos, { align: 'right' });
+
+    yPos += 7;
+    doc.setFontSize(12);
+    doc.setTextColor(...greenColor);
+    doc.text('Importe Neto:', 15, yPos);
+    doc.setFontSize(12);
+    doc.text(d.fmtP(d.impNeto), pageWidth - 15, yPos, { align: 'right' });
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(...mutedColor);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Este documento fue generado automáticamente por la Calculadora MAV', 15, pageHeight - 10);
+
+    // Save
+    const filename = `Reporte-MAV-${today.replace(/\s/g, '-')}.pdf`;
+    doc.save(filename);
+
+    btn.textContent = '✓ Descargado';
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }, 2000);
+
+  } catch (err) {
+    console.error('Error al generar PDF:', err);
     btn.textContent = 'Error';
     btn.disabled = false;
     setTimeout(() => {
