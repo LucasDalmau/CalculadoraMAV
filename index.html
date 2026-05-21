@@ -200,6 +200,23 @@ body {
 .btn-screenshot:hover { background: var(--surface2); border-color: var(--border-strong); }
 .btn-screenshot:active { transform: scale(0.98); }
 
+/* CLIENTE VALUES - responsive sizing */
+.cliente-value {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--text);
+  font-size: max(11px, min(14px, 3vw));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cliente-value.green {
+  color: var(--green);
+}
+.cliente-value.bold {
+  font-weight: 600;
+}
+
 @media (max-width: 700px) { .main-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -510,30 +527,30 @@ body {
       <!-- Una fila de 5 columnas como el cuadrito de la imagen -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
 
-        <div style="padding:14px 16px;border-right:1px solid var(--border);">
+        <div style="padding:14px 16px;border-right:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:6px;">Monto</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:500;color:var(--text);" id="cli-monto">—</div>
+          <div class="cliente-value" id="cli-monto">—</div>
         </div>
 
-        <div style="padding:14px 16px;border-right:1px solid var(--border);">
+        <div style="padding:14px 16px;border-right:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:6px;">Monto descontado</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:500;color:var(--green);" id="cli-neto">—</div>
+          <div class="cliente-value green" id="cli-neto">—</div>
         </div>
 
-        <div style="padding:14px 16px;border-right:1px solid var(--border);">
+        <div style="padding:14px 16px;border-right:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:6px;">Días / Vencimiento</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:500;color:var(--text);" id="cli-dias">—</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);margin-top:2px;" id="cli-venc">—</div>
+          <div class="cliente-value" id="cli-dias">—</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="cli-venc">—</div>
         </div>
 
-        <div style="padding:14px 16px;border-right:1px solid var(--border);">
+        <div style="padding:14px 16px;border-right:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:6px;">Tasa bruta</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:500;color:var(--text);" id="cli-tasa-bruta">—</div>
+          <div class="cliente-value" id="cli-tasa-bruta">—</div>
         </div>
 
-        <div style="padding:14px 16px;background:var(--highlight);">
+        <div style="padding:14px 16px;background:var(--highlight);display:flex;flex-direction:column;justify-content:center;">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:6px;">Tasa neta</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green);" id="cli-tasa-neta">—</div>
+          <div class="cliente-value green bold" id="cli-tasa-neta">—</div>
         </div>
 
       </div>
