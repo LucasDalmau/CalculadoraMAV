@@ -540,7 +540,7 @@ body {
     <div class="card" style="border:1.5px solid var(--border-strong); padding:20px 20px 16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div class="section-label" style="margin-bottom:0;border:none;padding:0;">Resumen para el cliente</div>
-        <button onclick="copiarCliente()" id="btn-copiar" style="font-family:var(--sans);font-size:11px;font-weight:500;padding:5px 14px;border:1px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);cursor:pointer;transition:all 0.12s;user-select:none;">Copiar texto</button>
+        <button onclick="copiarCliente()" id="btn-copiar" style="font-family:var(--sans);font-size:11px;font-weight:500;padding:5px 14px;border:1px solid var(--border);border-radius:2px;background:var(--surface);color:var(--text);cursor:pointer;">📋 Copiar</button>
       </div>
       <!-- Una fila de 5 columnas como el cuadrito de la imagen -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
@@ -855,7 +855,8 @@ function calcular() {
     monto, tasaAnual, arancelTNA, diasDesc, diasAcred, diasCalc,
     descuento, impDescontado, arancelBase, arancelIVA, arancelTotal,
     derPct, derBase, derIVA, derTotal, ivaDescTotal, totalGastos, impNeto,
-    esVenta, esPagare, esRI, fmtDate, fmtP, fmt
+    esVenta, esPagare, esRI, fmtDate, fmtP, fmt, impNetoSinIVA, tnaCIVA: (monto / impNeto - 1) * 365 / diasCalc,
+    tnaSIVA: (monto / impNetoSinIVA - 1) * 365 / diasCalc
   };
 }
 
@@ -966,119 +967,286 @@ function generatePDF() {
 
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    let yPos = 15;
+    const margin = 15;
+    let yPos = margin;
 
     // Colors
     const darkColor = [28, 27, 25];
     const mutedColor = [101, 98, 93];
     const greenColor = [20, 83, 45];
     const borderColor = [221, 219, 214];
+    const backgroundColor = [242, 241, 238];
 
-    // Header
+    // Helper function to add a section header
+    function addSectionHeader(title) {
+      if (yPos + 8 > pageHeight - margin) {
+        doc.addPage();
+        yPos = margin;
+      }
+      doc.setFontSize(11);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(title, margin, yPos);
+      yPos += 6;
+      
+      // Line under section header
+      doc.setDrawColor(...borderColor);
+      doc.line(margin, yPos - 1, pageWidth - margin, yPos - 1);
+      yPos += 3;
+    }
+
+    // Helper function to add table
+    function addTable(rows, colWidths) {
+      const colCount = colWidths.length;
+      const rowHeight = 5;
+      
+      rows.forEach((row, rowIdx) => {
+        if (yPos + rowHeight > pageHeight - margin) {
+          doc.addPage();
+          yPos = margin;
+        }
+
+        let xPos = margin;
+        row.forEach((cell, colIdx) => {
+          const colWidth = colWidths[colIdx];
+          
+          // Background for header rows
+          if (rowIdx === 0) {
+            doc.setFillColor(...backgroundColor);
+            doc.rect(xPos, yPos - rowHeight + 1, colWidth, rowHeight, 'F');
+            doc.setTextColor(...mutedColor);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+          } else if (cell.bold) {
+            doc.setTextColor(...darkColor);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+          } else {
+            doc.setTextColor(...darkColor);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+          }
+
+          doc.text(cell.text || '', xPos + 1, yPos - 2, { 
+            maxWidth: colWidth - 2,
+            align: cell.align || 'left'
+          });
+          
+          xPos += colWidth;
+        });
+
+        // Border
+        doc.setDrawColor(...borderColor);
+        doc.line(margin, yPos + rowHeight - rowHeight, pageWidth - margin, yPos + rowHeight - rowHeight);
+        
+        yPos += rowHeight;
+      });
+    }
+
+    // HEADER
     doc.setFontSize(16);
     doc.setTextColor(...darkColor);
     doc.setFont('helvetica', 'bold');
-    doc.text('Calculadora CPD / Pagarés', 15, yPos);
-
-    doc.setFontSize(10);
-    doc.setTextColor(...mutedColor);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Descuento de cheques de pago diferido y pagarés bursátiles', 15, yPos + 6);
-
-    // Date
-    doc.setFontSize(9);
-    doc.setTextColor(...mutedColor);
-    const today = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
-    doc.text(`Generado: ${today}`, pageWidth - 15, yPos, { align: 'right' });
-
-    yPos += 16;
-
-    // Section: Operación
-    doc.setFontSize(11);
-    doc.setTextColor(...darkColor);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Detalles de la Operación', 15, yPos);
-
-    yPos += 7;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...mutedColor);
-
-    const d = lastCalculationData;
-    const operDetails = [
-      [`Instrumento: ${d.instrumento.toUpperCase()}`, `Lado: ${d.operacion.toUpperCase()}`],
-      [`Concertación: ${d.fmtDate(d.fConc)}`, `Liquidación: ${d.fmtDate(d.fLiq)}`],
-      [`Vencimiento: ${d.fmtDate(d.fVenc)}`, `Acreditación: ${d.fmtDate(d.fAcr)}`],
-      [`Días de descuento: ${d.diasCalc}`, `Tasa TNA: ${d.fmt(d.tasaAnual*100, 2)}%`]
-    ];
-
-    operDetails.forEach(row => {
-      doc.text(row[0], 15, yPos);
-      doc.text(row[1], pageWidth/2, yPos);
-      yPos += 5;
-    });
-
-    yPos += 3;
-
-    // Section: Cálculos
-    doc.setFontSize(11);
-    doc.setTextColor(...darkColor);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Cálculos', 15, yPos);
-
-    yPos += 7;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...mutedColor);
-
-    const calcDetails = [
-      ['Valor Nominal', d.fmtP(d.monto)],
-      ['Descuento Bruto', d.fmtP(d.descuento)],
-      ['Importe Descontado', d.fmtP(d.impDescontado)],
-      ['Arancel ALyC', d.fmtP(d.arancelTotal)],
-      ['Derechos de Mercado', d.fmtP(d.derTotal)],
-      ['Otros Gastos', d.fmtP(d.ivaDescTotal)]
-    ];
-
-    calcDetails.forEach(([label, value]) => {
-      doc.setTextColor(...mutedColor);
-      doc.text(label + ':', 15, yPos);
-      doc.setTextColor(...darkColor);
-      doc.setFont('helvetica', 'bold');
-      doc.text(value, pageWidth - 15, yPos, { align: 'right' });
-      doc.setFont('helvetica', 'normal');
-      yPos += 5;
-    });
-
-    // Total line
-    yPos += 2;
-    doc.setDrawColor(...borderColor);
-    doc.line(15, yPos, pageWidth - 15, yPos);
+    doc.text('Calculadora CPD / Pagarés', margin, yPos);
     yPos += 5;
 
-    doc.setFontSize(11);
+    doc.setFontSize(9);
+    doc.setTextColor(...mutedColor);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Descuento de cheques de pago diferido y pagarés bursátiles', margin, yPos);
+    yPos += 4;
+
+    const today = new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'short', year:'numeric' });
+    doc.text(`Generado: ${today}`, pageWidth - margin, yPos, { align: 'right' });
+    yPos += 8;
+
+    // Top line
+    doc.setDrawColor(...darkColor);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 4;
+
+    // OPERACIÓN DETAILS
+    addSectionHeader('Parámetros de la Operación');
+    
+    const d = lastCalculationData;
+    const operationDetails = [
+      [{ text: 'Instrumento:', bold: true }, { text: d.esPagare ? 'Pagaré' : 'CPD' }],
+      [{ text: 'Operación:', bold: true }, { text: d.esVenta ? 'Venta' : 'Compra' }],
+      [{ text: 'Cond. IVA:', bold: true }, { text: d.esRI ? 'Resp. Inscripto' : 'Exento' }],
+    ];
+
+    operationDetails.forEach((row, idx) => {
+      if (yPos + 4 > pageHeight - margin) {
+        doc.addPage();
+        yPos = margin;
+      }
+      doc.setFontSize(8.5);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(row[0].text, margin, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(row[1].text, margin + 40, yPos);
+      yPos += 4;
+    });
+    yPos += 2;
+
+    // DATES
+    addSectionHeader('Cronología de Fechas');
+    
+    const dateTable = [
+      [
+        { text: 'Concepto', bold: true },
+        { text: 'Fecha', bold: true, align: 'right' }
+      ],
+      [
+        { text: 'Concertación' },
+        { text: document.getElementById('r-f-conc').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Liquidación' },
+        { text: document.getElementById('r-f-liq').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Vencimiento' },
+        { text: document.getElementById('r-f-venc').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Acreditación' },
+        { text: document.getElementById('r-f-acred').textContent, align: 'right' }
+      ],
+    ];
+
+    addTable(dateTable, [pageWidth - 2 * margin - 30, 30]);
+    yPos += 2;
+
+    // SUMMARY
+    addSectionHeader('Resumen de Montos');
+
+    const summaryTable = [
+      [
+        { text: 'Concepto', bold: true },
+        { text: 'Importe ($)', bold: true, align: 'right' }
+      ],
+      [
+        { text: 'Valor nominal' },
+        { text: document.getElementById('r-monto').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Descuento bruto' },
+        { text: document.getElementById('r-descuento').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Importe descontado' },
+        { text: document.getElementById('r-imp-desc').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Total gastos', bold: true },
+        { text: document.getElementById('r-gastos-total').textContent, bold: true, align: 'right' }
+      ],
+      [
+        { text: 'IMPORTE NETO', bold: true },
+        { text: document.getElementById('r-neto').textContent, bold: true, align: 'right' }
+      ],
+    ];
+
+    addTable(summaryTable, [pageWidth - 2 * margin - 40, 40]);
+    yPos += 2;
+
+    // COSTS BREAKDOWN
+    addSectionHeader('Detalle de Costos');
+
+    const costsTable = [
+      [
+        { text: 'Concepto', bold: true },
+        { text: 'Total ($)', bold: true, align: 'right' },
+        { text: 'Base IVA ($)', bold: true, align: 'right' },
+        { text: 'IVA ($)', bold: true, align: 'right' }
+      ],
+      [
+        { text: 'Arancel ALyC' },
+        { text: document.getElementById('r-arancel-total').textContent, align: 'right' },
+        { text: document.getElementById('r-arancel-base').textContent, align: 'right' },
+        { text: document.getElementById('r-arancel-iva').textContent, align: 'right' }
+      ],
+      [
+        { text: 'Derechos de Mercado' },
+        { text: document.getElementById('r-der-total').textContent, align: 'right' },
+        { text: document.getElementById('r-der-base').textContent, align: 'right' },
+        { text: document.getElementById('r-der-iva').textContent, align: 'right' }
+      ],
+    ];
+
+    // Add IVA sobre descuento if visible
+    if (document.getElementById('row-iva-desc').style.display !== 'none') {
+      costsTable.push([
+        { text: 'IVA s/Descuento' },
+        { text: document.getElementById('r-iva-desc-total').textContent, align: 'right' },
+        { text: '—', align: 'right' },
+        { text: document.getElementById('r-iva-desc-iva').textContent, align: 'right' }
+      ]);
+    }
+
+    addTable(costsTable, [pageWidth - 2 * margin - 75, 25, 25, 25]);
+    yPos += 3;
+
+    // FLOWS AND RATES
+    addSectionHeader('Flujos de Efectivo y Tasas');
+
+    const flowsTable = [
+      [
+        { text: 'Fecha', bold: true },
+        { text: 'Con IVA ($)', bold: true, align: 'right' },
+        { text: 'Sin IVA ($)', bold: true, align: 'right' }
+      ],
+      [
+        { text: document.getElementById('r-flujo-f0').textContent },
+        { text: document.getElementById('r-flujo-v0-iva').textContent, align: 'right' },
+        { text: document.getElementById('r-flujo-v0-siva').textContent, align: 'right' }
+      ],
+      [
+        { text: document.getElementById('r-flujo-f1').textContent },
+        { text: document.getElementById('r-flujo-v1-iva').textContent, align: 'right' },
+        { text: document.getElementById('r-flujo-v1-siva').textContent, align: 'right' }
+      ],
+    ];
+
+    addTable(flowsTable, [pageWidth - 2 * margin - 60, 30, 30]);
+    yPos += 3;
+
+    // RATES
+    addSectionHeader('Tasa Efectiva (TNA)');
+
+    if (yPos + 8 > pageHeight - margin) {
+      doc.addPage();
+      yPos = margin;
+    }
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(...mutedColor);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Sin IVA s/Arancel:', margin, yPos);
+    doc.setTextColor(...darkColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text(document.getElementById('r-tna-siva').textContent, margin + 45, yPos);
+    yPos += 4;
+
+    doc.setTextColor(...mutedColor);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Con IVA s/Arancel:', margin, yPos);
     doc.setTextColor(...greenColor);
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Gastos:', 15, yPos);
-    doc.setFontSize(11);
-    doc.text(d.fmtP(d.totalGastos), pageWidth - 15, yPos, { align: 'right' });
-
-    yPos += 7;
-    doc.setFontSize(12);
-    doc.setTextColor(...greenColor);
-    doc.text('Importe Neto:', 15, yPos);
-    doc.setFontSize(12);
-    doc.text(d.fmtP(d.impNeto), pageWidth - 15, yPos, { align: 'right' });
+    doc.text(document.getElementById('r-tna-civa').textContent, margin + 45, yPos);
+    yPos += 6;
 
     // Footer
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setTextColor(...mutedColor);
     doc.setFont('helvetica', 'italic');
-    doc.text('Este documento fue generado automáticamente por la Calculadora MAV', 15, pageHeight - 10);
+    doc.text('Este documento fue generado automáticamente por la Calculadora CPD / Pagarés', 
+      margin, pageHeight - 8, { align: 'left' });
 
-    // Save
-    const filename = `Reporte-MAV-${today.replace(/\s/g, '-')}.pdf`;
-    doc.save(filename);
+    // Save PDF
+    doc.save('Calculadora-CPD-Pagares.pdf');
 
     btn.textContent = '✓ Descargado';
     setTimeout(() => {
@@ -1096,93 +1264,59 @@ function generatePDF() {
   }
 }
 
-// ─── CUADRO CLIENTE ───────────────────────────────────────────
 function updateCliente(monto, impNeto, diasDesc, tasaAnual, tnaCIVA, fVenc) {
-  const card = document.getElementById('card-cliente');
-  if (!monto || isNaN(impNeto) || diasDesc <= 0) { card.style.display='none'; return; }
-  card.style.display = 'block';
-  set('cli-monto',      fmtP(monto));
-  set('cli-neto',       fmtP(impNeto));
-  set('cli-dias',       diasDesc + ' días');
-  set('cli-tasa-bruta', fmt(tasaAnual*100, 2) + '% TNA');
-  set('cli-tasa-neta',  fmt(tnaCIVA*100, 2) + '% TNA');
-  set('cli-venc',       fmtDate(fVenc));
+  document.getElementById('card-cliente').style.display = 'block';
+  
+  const tasaBruta = tasaAnual * 100;
+  
+  document.getElementById('cli-monto').textContent = fmt(monto, 2);
+  document.getElementById('cli-neto').textContent = fmt(impNeto, 2);
+  document.getElementById('cli-dias').textContent = diasDesc;
+  document.getElementById('cli-venc').textContent = fVenc.toLocaleDateString('es-AR');
+  document.getElementById('cli-tasa-bruta').textContent = fmt(tasaBruta, 2) + '%';
+  document.getElementById('cli-tasa-neta').textContent = fmt(tnaCIVA * 100, 2) + '%';
 }
 
 function copiarCliente() {
-  const monto     = document.getElementById('cli-monto').textContent;
-  const neto      = document.getElementById('cli-neto').textContent;
-  const dias      = document.getElementById('cli-dias').textContent;
-  const tasaBruta = document.getElementById('cli-tasa-bruta').textContent;
-  const tasaNeta  = document.getElementById('cli-tasa-neta').textContent;
-  const venc      = document.getElementById('cli-venc').textContent;
-
-  const texto = `Negociación MAV
-──────────────────────
-Monto nominal:     ${monto}
-Monto a acreditar: ${neto}
-Días a vto.:       ${dias}
-Vencimiento:       ${venc}
-Tasa bruta TNA:    ${tasaBruta}
-Tasa neta TNA:     ${tasaNeta}`;
-
-  navigator.clipboard.writeText(texto).then(() => {
+  const cliente = document.getElementById('card-cliente');
+  const text = `
+Monto: $ ${document.getElementById('cli-monto').textContent}
+Monto descontado: $ ${document.getElementById('cli-neto').textContent}
+Días/Vencimiento: ${document.getElementById('cli-dias').textContent} - ${document.getElementById('cli-venc').textContent}
+Tasa bruta: ${document.getElementById('cli-tasa-bruta').textContent}
+Tasa neta: ${document.getElementById('cli-tasa-neta').textContent}
+  `.trim();
+  
+  navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('btn-copiar');
+    const original = btn.textContent;
     btn.textContent = '✓ Copiado';
-    setTimeout(() => btn.textContent = 'Copiar texto', 2000);
+    setTimeout(() => { btn.textContent = original; }, 2000);
   });
 }
 
-// ─── DÍAS ↔ FECHA VENCIMIENTO ─────────────────────────────────
-function diasToFecha() {
-  const fLiq = parseDate(document.getElementById('f-liquidacion').value);
-  const dias  = parseInt(document.getElementById('dias-venc').value.replace(/\./g,''), 10);
-  if (!fLiq || isNaN(dias) || dias <= 0) return;
-  const fVenc = new Date(fLiq.getTime());
-  fVenc.setDate(fVenc.getDate() + dias);
-  document.getElementById('f-vencimiento').value = toISO(fVenc);
-  updateAcreditacion();
-  calcular();
-}
+// Event listeners for dates
+document.getElementById('f-vencimiento').addEventListener('change', updateAcreditacion);
+document.getElementById('f-vencimiento').addEventListener('change', calcular);
+document.getElementById('f-concertacion').addEventListener('change', updateLiquidacion);
+document.getElementById('f-concertacion').addEventListener('change', calcular);
 
-function fechaToDias() {
-  const fLiq  = parseDate(document.getElementById('f-liquidacion').value);
-  const fVenc = parseDate(document.getElementById('f-vencimiento').value);
-  if (!fLiq || !fVenc) return;
-  const dias = daysDiff(fLiq, fVenc);
-  document.getElementById('dias-venc').value = dias > 0 ? dias : '';
-  updateAcreditacion();
-  calcular();
-}
+// Event listeners for inputs
+document.getElementById('monto').addEventListener('change', calcular);
+document.getElementById('tasa').addEventListener('change', calcular);
+document.getElementById('arancel-pct').addEventListener('change', calcular);
+document.getElementById('dias-venc').addEventListener('change', calcular);
 
-// ─── LISTENERS ────────────────────────────────────────────────
-document.getElementById('f-concertacion').addEventListener('change', () => {
-  updateLiquidacion();
-  // Keep fecha fija, recalcular días mostrados
-  const fLiq  = parseDate(document.getElementById('f-liquidacion').value);
-  const fVenc = parseDate(document.getElementById('f-vencimiento').value);
-  if (fLiq && fVenc) {
-    const dias = daysDiff(fLiq, fVenc);
-    document.getElementById('dias-venc').value = dias > 0 ? dias : '';
-  }
-  calcular();
+// Event listeners for radio buttons
+document.querySelectorAll('input[name="instrumento"]').forEach(el => {
+  el.addEventListener('change', () => { toggleCondicionales(); updateAcreditacion(); calcular(); });
 });
-document.getElementById('f-vencimiento').addEventListener('change', fechaToDias);
-document.getElementById('dias-venc').addEventListener('input', diasToFecha);
-document.getElementById('dias-venc').addEventListener('change', diasToFecha);
-document.getElementById('f-acreditacion').addEventListener('change', calcular);
-
-['monto','tasa','arancel-pct'].forEach(id => {
-  document.getElementById(id).addEventListener('input',  calcular);
-  document.getElementById(id).addEventListener('change', calcular);
+document.querySelectorAll('input[name="operacion"]').forEach(el => {
+  el.addEventListener('change', calcular);
 });
-
-document.querySelectorAll('input[name="instrumento"]').forEach(r =>
-  r.addEventListener('change', () => { toggleCondicionales(); updateAcreditacion(); calcular(); })
-);
-document.querySelectorAll('input[name="operacion"], input[name="iva_cond"]').forEach(r =>
-  r.addEventListener('change', calcular)
-);
+document.querySelectorAll('input[name="iva_cond"]').forEach(el => {
+  el.addEventListener('change', calcular);
+});
 </script>
 </body>
 </html>
